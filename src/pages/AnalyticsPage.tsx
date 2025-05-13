@@ -1,11 +1,228 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Card from '../components/ui/Card';
 import { useTheme } from '../context/ThemeContext';
 import { Calendar, BarChart, PieChart, TrendingUp, MessageSquare, Activity } from 'lucide-react';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+  PointElement,
+  LineElement,
+  Filler
+} from 'chart.js';
+import { Bar, Pie, Line } from 'react-chartjs-2';
+import { createClient } from '@supabase/supabase-js';
+
+// Register ChartJS components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+  PointElement,
+  LineElement,
+  Filler
+);
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 
 const AnalyticsPage: React.FC = () => {
   const { theme } = useTheme();
-  
+  const [donationData, setDonationData] = useState({
+    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+    datasets: [
+      {
+        label: 'Donations',
+        data: [0, 0, 0, 0, 0, 0],
+        backgroundColor: theme === 'dark' ? 'rgba(59, 130, 246, 0.5)' : 'rgba(59, 130, 246, 0.8)',
+      },
+    ],
+  });
+
+  const [categoryData, setCategoryData] = useState({
+    labels: ['Clothing', 'Food', 'Medical', 'Education', 'Other'],
+    datasets: [
+      {
+        data: [0, 0, 0, 0, 0],
+        backgroundColor: [
+          'rgba(59, 130, 246, 0.8)',
+          'rgba(34, 197, 94, 0.8)',
+          'rgba(239, 68, 68, 0.8)',
+          'rgba(168, 85, 247, 0.8)',
+          'rgba(234, 179, 8, 0.8)',
+        ],
+      },
+    ],
+  });
+
+  const [predictionData, setPredictionData] = useState({
+    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+    datasets: [
+      {
+        label: 'Actual',
+        data: [0, 0, 0, 0, 0, 0],
+        borderColor: 'rgba(59, 130, 246, 1)',
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        fill: true,
+      },
+      {
+        label: 'Predicted',
+        data: [0, 0, 0, 0, 0, 0],
+        borderColor: 'rgba(234, 179, 8, 1)',
+        backgroundColor: 'rgba(234, 179, 8, 0.1)',
+        fill: true,
+      },
+    ],
+  });
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch donation trends
+        const { data: donations } = await supabase
+          .from('inventory')
+          .select('created_at')
+          .order('created_at', { ascending: true });
+
+        if (donations) {
+          const monthlyDonations = new Array(6).fill(0);
+          donations.forEach((donation) => {
+            const month = new Date(donation.created_at).getMonth();
+            if (month >= 0 && month < 6) {
+              monthlyDonations[month]++;
+            }
+          });
+
+          setDonationData(prev => ({
+            ...prev,
+            datasets: [{
+              ...prev.datasets[0],
+              data: monthlyDonations,
+            }],
+          }));
+        }
+
+        // Fetch category distribution
+        const { data: categories } = await supabase
+          .from('inventory')
+          .select('category');
+
+        if (categories) {
+          const categoryCounts = {
+            Clothing: 0,
+            Food: 0,
+            Medical: 0,
+            Education: 0,
+            Other: 0,
+          };
+
+          categories.forEach((item) => {
+            if (item.category in categoryCounts) {
+              categoryCounts[item.category as keyof typeof categoryCounts]++;
+            } else {
+              categoryCounts.Other++;
+            }
+          });
+
+          setCategoryData(prev => ({
+            ...prev,
+            datasets: [{
+              ...prev.datasets[0],
+              data: Object.values(categoryCounts),
+            }],
+          }));
+        }
+
+        // Generate prediction data (mock data for demonstration)
+        const actualData = [65, 72, 78, 85, 82, 90];
+        const predictedData = [68, 75, 80, 88, 85, 95];
+
+        setPredictionData(prev => ({
+          ...prev,
+          datasets: [
+            {
+              ...prev.datasets[0],
+              data: actualData,
+            },
+            {
+              ...prev.datasets[1],
+              data: predictedData,
+            },
+          ],
+        }));
+      } catch (error) {
+        console.error('Error fetching analytics data:', error);
+      }
+    };
+
+    fetchData();
+
+    // Set up real-time subscription
+    const subscription = supabase
+      .channel('inventory_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [theme]);
+
+  const chartOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+        labels: {
+          color: theme === 'dark' ? '#fff' : '#000',
+        },
+      },
+    },
+    scales: {
+      y: {
+        ticks: {
+          color: theme === 'dark' ? '#fff' : '#000',
+        },
+        grid: {
+          color: theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+        },
+      },
+      x: {
+        ticks: {
+          color: theme === 'dark' ? '#fff' : '#000',
+        },
+        grid: {
+          color: theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+        },
+      },
+    },
+  };
+
+  const pieOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+        labels: {
+          color: theme === 'dark' ? '#fff' : '#000',
+        },
+      },
+    },
+  };
+
   return (
     <div className="space-y-8">
       <h1 className="text-2xl font-bold">Analytics & Insights</h1>
@@ -105,95 +322,22 @@ const AnalyticsPage: React.FC = () => {
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <Card title="Donation Trends" subtitle="Monthly donation volume by category">
-          <div 
-            className={`w-full h-[300px] rounded-lg flex items-center justify-center ${
-              theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-            }`}
-          >
-            <p className="text-gray-500">Bar chart visualization would be displayed here</p>
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-4 text-center">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Most Donated Category</p>
-              <p className="text-lg font-semibold">Clothing</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Highest Growth</p>
-              <p className="text-lg font-semibold">Medical Supplies</p>
-            </div>
+          <div className="w-full h-[300px]">
+            <Bar data={donationData} options={chartOptions} />
           </div>
         </Card>
         
         <Card title="Donation Distribution" subtitle="Percentage allocation across categories">
-          <div 
-            className={`w-full h-[300px] rounded-lg flex items-center justify-center ${
-              theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-            }`}
-          >
-            <p className="text-gray-500">Pie chart visualization would be displayed here</p>
-          </div>
-          <div className="mt-4 grid grid-cols-4 gap-2 text-center">
-            <div>
-              <div className={`w-4 h-4 mx-auto rounded-full bg-blue-500`}></div>
-              <p className="text-xs mt-1">Clothing</p>
-              <p className="text-xs font-semibold">35%</p>
-            </div>
-            <div>
-              <div className={`w-4 h-4 mx-auto rounded-full bg-green-500`}></div>
-              <p className="text-xs mt-1">Food</p>
-              <p className="text-xs font-semibold">28%</p>
-            </div>
-            <div>
-              <div className={`w-4 h-4 mx-auto rounded-full bg-yellow-500`}></div>
-              <p className="text-xs mt-1">Medical</p>
-              <p className="text-xs font-semibold">18%</p>
-            </div>
-            <div>
-              <div className={`w-4 h-4 mx-auto rounded-full bg-red-500`}></div>
-              <p className="text-xs mt-1">Other</p>
-              <p className="text-xs font-semibold">19%</p>
-            </div>
+          <div className="w-full h-[300px]">
+            <Pie data={categoryData} options={pieOptions} />
           </div>
         </Card>
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <Card title="AI Prediction Accuracy" subtitle="Model performance metrics">
-          <div 
-            className={`w-full h-[250px] rounded-lg flex items-center justify-center ${
-              theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-            }`}
-          >
-            <p className="text-gray-500">Line chart visualization would be displayed here</p>
-          </div>
-          <div className="mt-4 space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-sm">Demand Prediction</span>
-              <div className="flex items-center">
-                <span className="font-medium mr-2">92%</span>
-                <div className="w-32 h-2 bg-gray-300 dark:bg-gray-600 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500 rounded-full" style={{ width: '92%' }}></div>
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm">Matching Accuracy</span>
-              <div className="flex items-center">
-                <span className="font-medium mr-2">94%</span>
-                <div className="w-32 h-2 bg-gray-300 dark:bg-gray-600 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500 rounded-full" style={{ width: '94%' }}></div>
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm">Category Recognition</span>
-              <div className="flex items-center">
-                <span className="font-medium mr-2">89%</span>
-                <div className="w-32 h-2 bg-gray-300 dark:bg-gray-600 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500 rounded-full" style={{ width: '89%' }}></div>
-                </div>
-              </div>
-            </div>
+          <div className="w-full h-[250px]">
+            <Line data={predictionData} options={chartOptions} />
           </div>
         </Card>
         
@@ -243,32 +387,10 @@ const AnalyticsPage: React.FC = () => {
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">5 hours ago</p>
               </div>
             </div>
-            
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  theme === 'dark' ? 'bg-yellow-900' : 'bg-yellow-100'
-                }`}>
-                  <Activity size={16} className="text-yellow-600" />
-                </div>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium">New Demand Prediction</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Medical supplies demand forecasted to increase by 24%</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">1 day ago</p>
-              </div>
-            </div>
           </div>
         </Card>
         
         <Card title="Blockchain Transparency" subtitle="Smart contract activity">
-          <div 
-            className={`w-full h-[250px] rounded-lg flex items-center justify-center ${
-              theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-            }`}
-          >
-            <p className="text-gray-500">Blockchain visualization would be displayed here</p>
-          </div>
           <div className="mt-4 space-y-2 text-sm">
             <div className={`p-2 rounded ${
               theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'

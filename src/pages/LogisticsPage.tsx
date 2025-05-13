@@ -1,11 +1,29 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { useTheme } from '../context/ThemeContext';
 import { Truck, MapPin, Route, Clock, Calendar, Box } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// Fix for default marker icons
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
 
 const LogisticsPage: React.FC = () => {
   const { theme } = useTheme();
+  const [center] = useState<[number, number]>([51.505, -0.09]);
+  const [deliveryPoints] = useState([
+    { id: 1, position: [51.505, -0.09], name: 'Central Warehouse' },
+    { id: 2, position: [51.51, -0.1], name: 'Downtown Distribution' },
+    { id: 3, position: [51.49, -0.08], name: 'South Hub' },
+    { id: 4, position: [51.52, -0.11], name: 'North Center' },
+  ]);
   
   // Mock data for delivery routes
   const routes = [
@@ -37,7 +55,7 @@ const LogisticsPage: React.FC = () => {
       items: 8,
     },
   ];
-  
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'In Progress':
@@ -56,7 +74,7 @@ const LogisticsPage: React.FC = () => {
         return null;
     }
   };
-  
+
   return (
     <div className="space-y-8">
       <h1 className="text-2xl font-bold">Logistics Management</h1>
@@ -67,61 +85,29 @@ const LogisticsPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
           <Card title="Route Map" subtitle="Live tracking of all delivery routes">
-            <div 
-              className={`relative w-full h-[400px] rounded-lg overflow-hidden ${
-                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-              }`}
-            >
-              {/* Map placeholder - would be replaced with actual map component */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <p className="text-gray-500">Interactive logistics map would be displayed here</p>
-              </div>
-              
-              {/* Sample route markers */}
-              <div className="absolute top-[30%] left-[25%] transform -translate-x-1/2 -translate-y-1/2">
-                <div className="relative">
-                  <Truck size={24} className="text-blue-500" />
-                </div>
-              </div>
-              
-              <div className="absolute top-[50%] left-[55%] transform -translate-x-1/2 -translate-y-1/2">
-                <div className="relative">
-                  <Truck size={24} className="text-yellow-500" />
-                </div>
-              </div>
-              
-              {/* Route lines would be drawn here in a real implementation */}
-              
-              {/* Destination markers */}
-              <div className="absolute top-[35%] left-[35%] transform -translate-x-1/2 -translate-y-1/2">
-                <div className="relative">
-                  <MapPin size={20} className="text-red-500" />
-                </div>
-              </div>
-              
-              <div className="absolute top-[40%] left-[20%] transform -translate-x-1/2 -translate-y-1/2">
-                <div className="relative">
-                  <MapPin size={20} className="text-red-500" />
-                </div>
-              </div>
-              
-              <div className="absolute top-[25%] left-[15%] transform -translate-x-1/2 -translate-y-1/2">
-                <div className="relative">
-                  <MapPin size={20} className="text-red-500" />
-                </div>
-              </div>
-              
-              <div className="absolute top-[60%] left-[62%] transform -translate-x-1/2 -translate-y-1/2">
-                <div className="relative">
-                  <MapPin size={20} className="text-red-500" />
-                </div>
-              </div>
-              
-              <div className="absolute top-[45%] left-[40%] transform -translate-x-1/2 -translate-y-1/2">
-                <div className="relative">
-                  <MapPin size={20} className="text-red-500" />
-                </div>
-              </div>
+            <div className="w-full h-[400px] rounded-lg overflow-hidden">
+              <MapContainer 
+                center={center} 
+                zoom={13} 
+                style={{ height: '100%', width: '100%' }}
+              >
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+                {deliveryPoints.map((point: any) => (
+                  <Marker 
+                    key={point.id} 
+                    position={point.position as [number, number]}
+                  >
+                    <Popup>
+                      <div className="p-2">
+                        <h3 className="font-semibold">{point.name}</h3>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))}
+              </MapContainer>
             </div>
             
             <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
